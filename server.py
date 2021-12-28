@@ -3,9 +3,7 @@ import socket
 import time
 import threading
 import queue
-import struct
 import math
-from typing import List, Match
 
 
 from mediator import *
@@ -23,7 +21,6 @@ message_type = bytes([0x2])
 server_port = str(WELCOME_PORT).encode(FORMAT)
 udp_msg = UDP_msg(magic_cookie, message_type, server_port)
 msg = udp_msg.get_msg()
-answers_queue : queue.Queue = []
 player_names = [None, None]
 winner_name = None
 need_to_run = True
@@ -110,18 +107,23 @@ def client_registration_running(registration_locker : threading.Lock, playing_lo
         starting_msg_in_bytes = starting_msg.encode(FORMAT)
         server_tcp_client_sock.sendall(starting_msg_in_bytes)
         # server_tcp_client_sock.settimeout(10)
-        answer_thread = threading.Thread(target = recieve_answer_running, args = (server_tcp_client_sock,))
+        answers_queue = queue.Queue()
+        answer_thread = threading.Thread(target = recieve_answer_running, args = (server_tcp_client_sock, answers_queue,))
         answer_thread.start()
         try:
-            client_answer_in_bytes = answers_queue.get(True, 10)
-            client_answer = client_answer_in_bytes.decode(FORMAT)
+            client_answer = answers_queue.get(block = True, timeout = 10)
+            answering_locker.acquire
             if (winner_name == None):
                 if(client_answer == "4"):
                     winner_name = client_name
                 else:
                     winner_name = player_names[abs(index_name - 1)]
+            answering_locker.release
         except TimeoutError:
             winner_name = "tie"
+            pass 
+        finally:
+
         # try:
         #     client_answer_in_bytes = server_tcp_client_sock.recv(TCP_MSG_SIZE)
         #     answering_locker.acquire()
@@ -142,19 +144,26 @@ def client_registration_running(registration_locker : threading.Lock, playing_lo
         #     else:
         #         winner_name = player_names[abs(index_name - 1)]
         # answering_locker.release()
-        ending_msg = game_over_msg.format("4", winner_name)
-        ending_msg_in_bytes = ending_msg.encode(FORMAT)
-        server_tcp_client_sock.sendall(ending_msg_in_bytes)
-        # server_tcp_client_sock.close()
-        playing_locker.release()
+        
+            ending_msg = game_over_msg.format("4", winner_name)
+            ending_msg_in_bytes = ending_msg.encode(FORMAT)
+            server_tcp_client_sock.sendall(ending_msg_in_bytes)
+            # server_tcp_client_sock.close()
+            playing_locker.release()
+            clear(server_tcp_client_sock)
         # sock_list.pop
 
-def recieve_answer_running(server_tcp_client_sock : socket.socket):
-    global answers_queue
+def clear(socket: socket.socket):
+    data, addr = socket.recv(TCP_MSG_SIZE)
+    while data:
+        data, addr = socket.recv(TCP_MSG_SIZE)
+
+def recieve_answer_running(server_tcp_client_sock : socket.socket , answers_queue : queue.Queue):
     client_answer_in_bytes = server_tcp_client_sock.recv(TCP_MSG_SIZE)
     answering_locker.acquire()
     client_answer = client_answer_in_bytes.decode(FORMAT)
     answers_queue.put (client_answer)
+
 
 def start():
     print("Server started, listening on IP address {}".format(IP))

@@ -21,7 +21,6 @@ def start():
                 group_name = input() #"Kim" 
                 group_name_in_bytes = group_name.encode(FORMAT)
                 client_tcp_sock.sendall(group_name_in_bytes)
-                print("sent")
                 try:
                     game_msg_byte = client_tcp_sock.recv(TCP_MSG_SIZE)
                     game_msg = game_msg_byte.decode(FORMAT)
