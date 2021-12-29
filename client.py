@@ -1,5 +1,7 @@
 import socket
 import sys
+import select
+import msvcrt
 
 from mediator import *
 def start():
@@ -17,17 +19,24 @@ def start():
             server_port = int(msg[5:].decode(FORMAT))
             try:
                 client_tcp_sock.connect((server_ip, server_port))
-                print("choose a name:")
-                group_name = input() #"Kim" 
+                # print("choose a name:")
+                group_name = "Kim" 
                 group_name_in_bytes = group_name.encode(FORMAT)
                 client_tcp_sock.sendall(group_name_in_bytes)
                 try:
                     game_msg_byte = client_tcp_sock.recv(TCP_MSG_SIZE)
                     game_msg = game_msg_byte.decode(FORMAT)
                     print(game_msg)
-                    ans = sys.stdin.read(1)
-                    client_tcp_sock.send(ans.encode(FORMAT))
+                    # ans = sys.stdin.read(1)
+                    # client_tcp_sock.send(ans.encode(FORMAT))
                     try:
+                        c = msvcrt.getch()
+                        # score_msg_byte = client_tcp_sock.recv(TCP_MSG_SIZE)
+                        read , _ , _= select.select([sys.stdin.fileno(), client_tcp_sock.fileno()], [], [], 10)
+                        if(sys.stdin.fileno() in read):
+                            # c = sys.stdin.read(1)
+                            c = msvcrt.getch()
+                            client_tcp_sock.send(c.encode(FORMAT))
                         score_msg_byte = client_tcp_sock.recv(TCP_MSG_SIZE)
                         score_msg = score_msg_byte.decode(FORMAT)
                         print(score_msg)
@@ -39,6 +48,7 @@ def start():
                 print(e)
             print("Server disconnected, listening for offer requests...\n")
     client_udp_sock.close()
+
 def main():
     print("Client started, listening for offer request...")
     while True:
