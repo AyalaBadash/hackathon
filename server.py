@@ -134,7 +134,7 @@ def client_registration_running(registration_locker : threading.Lock, playing_lo
             else:
                 winner_name = player_names[abs(index_name - 1)]
         answering_locker.release()
-    except:
+    except Exception as e:
         if(winner_name == None):
             winner_name = "tie"
     # server_tcp_client_sock.settimeout(None)
@@ -144,7 +144,7 @@ def client_registration_running(registration_locker : threading.Lock, playing_lo
     #     else:
     #         winner_name = player_names[abs(index_name - 1)]
     # answering_locker.release()    
-    ending_msg = game_over_msg.format("4", winner_name)
+    ending_msg = game_over_msg.format(answers[num_of_question], winner_name)
     ending_msg_in_bytes = ending_msg.encode(FORMAT)
     try:
         server_tcp_client_sock.sendall(ending_msg_in_bytes)
