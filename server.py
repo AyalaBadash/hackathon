@@ -58,6 +58,21 @@ def UDP_running():
         broadcast_locker.release()
         time.sleep(1)
 
+def udp():
+    tcp_thread = threading.Thread(target = welcome_tcp)
+    server_udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    server_udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    server_udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_udp_sock.bind(broadcast_server_addr)
+    server_udp_sock.sendto(msg, broadcast_client_addr)
+    time.sleep(1)
+    tcp_thread.start()
+    while True:
+        broadcast_locker.acquire()
+        server_udp_sock.sendto( msg, broadcast_client_addr)
+        broadcast_locker.release()
+        time.sleep(1)
+
 def TCP_welcome_running():
     global can_play
     server_tcp_welcome_sock.bind(TCP_welcome_addr)
@@ -69,8 +84,9 @@ def TCP_welcome_running():
         playing_locker2 = threading.Lock()
         first_player_thread = threading.Thread(target = client_registration_running, args = (0,))
         second_player_thread = threading.Thread(target = client_registration_running, args = (1,))
-        first_player_thread = threading.Thread(target = client_registration_running, args = (registration_locker1, playing_locker1, 0))
-        second_player_thread = threading.Thread(target = client_registration_running, args = (registration_locker2, playing_locker2, 1))
+        quest_num = random.randint(0,18)
+        first_player_thread = threading.Thread(target = client_registration_running, args = (registration_locker1, playing_locker1, 0, quest_num))
+        second_player_thread = threading.Thread(target = client_registration_running, args = (registration_locker2, playing_locker2, 1, quest_num))
         playing_locker1.acquire()
         playing_locker2.acquire()
         first_player_thread.start()
@@ -88,13 +104,71 @@ def TCP_welcome_running():
         first_player_thread.join()
         second_player_thread.join()
         broadcast_locker.release()
+
+def welcome_tcp():
+    server_tcp_welcome_sock.bind(TCP_welcome_addr)
+    server_tcp_welcome_sock.listen(2)
+    while True:
+        server_tcp_client1_sock, addr = server_tcp_welcome_sock.accept()
+        server_tcp_client2_sock, addr = server_tcp_welcome_sock.accept()
+        client_msg_bytes =  server_tcp_client1_sock.recv(TCP_MSG_SIZE)
+        server_tcp_client1_sock.settimeout(10)
+        client_name1 = client_msg_bytes.decode(FORMAT)
+        client_msg_bytes =  server_tcp_client2_sock.recv(TCP_MSG_SIZE)
+        server_tcp_client2_sock.settimeout(10)
+        client_name2 = client_msg_bytes.decode(FORMAT)
+        player_names[0] = client_name1
+        player_names[1] = client_name2
+        time.sleep(10)
+        quest_num = random.randint(0,18)
+        starting_msg = welcome_msg.format(player_names[0], player_names[1], questions[quest_num])
+        starting_msg_in_bytes = starting_msg.encode(FORMAT)
+        server_tcp_client1_sock.sendall(starting_msg_in_bytes)
+        server_tcp_client2_sock.sendall(starting_msg_in_bytes)
+        first_player_thread = threading.Thread(target = answer_recieve, args = (server_tcp_client1_sock, client_name1, client_name2, quest_num,))
+        second_player_thread = threading.Thread(target = answer_recieve, args = (server_tcp_client2_sock, client_name2, client_name1, quest_num,))
+        first_player_thread.start()
+        second_player_thread.start()
+        ending_msg = game_over_msg.format(answers[quest_num], winner_name)
+        ending_msg_in_bytes = ending_msg.encode(FORMAT)
+        try:
+            server_tcp_client1_sock.sendall(ending_msg_in_bytes)
+            server_tcp_client2_sock.sendall(ending_msg_in_bytes)
+        except Exception as e:
+            print(e)
+            print("server problem")
+        server_tcp_client1_sock.close()
+        server_tcp_client2_sock.close()
+
+
+
+def answer_recieve(server_tcp_client_sock : socket.socket, client_name, enemy_name, quest_num : int):
+    global winner_name
+    try:
+        print("before sending")
+        client_answer_in_bytes = server_tcp_client_sock.recv(TCP_MSG_SIZE)
+        print("after sending")
+        answering_locker.acquire()
+        client_answer = client_answer_in_bytes.decode(FORMAT)
+        if (winner_name == None):
+            if(client_answer == answers[quest_num]):
+                winner_name = client_name
+            else:
+                winner_name = enemy_name
+        answering_locker.release()
+    except Exception as e:
+        print(e)
+        print("server problem")
+        if(winner_name == None):
+            winner_name = "tie"
     
-    
-def client_registration_running(registration_locker : threading.Lock, playing_locker : threading.Lock, index_name : int):
+
+def client_registration_running(registration_locker : threading.Lock, playing_locker : threading.Lock, index_name : int, quest_num: int):
     global winner_name
     winner_name = None
     registration_locker.acquire()
     server_tcp_client_sock, addr = server_tcp_welcome_sock.accept()
+    server_tcp_client_sock.settimeout(10)
     client_msg_bytes =  server_tcp_client_sock.recv(TCP_MSG_SIZE)
     client_name = client_msg_bytes.decode(FORMAT)
     print(client_name)
@@ -102,11 +176,9 @@ def client_registration_running(registration_locker : threading.Lock, playing_lo
     # sock_list.insert(index_name, server_tcp_client_sock)
     registration_locker.release()
     playing_locker.acquire()
-    num_of_question = random.randint(0,18)
-    starting_msg = welcome_msg.format(player_names[0], player_names[1], questions[num_of_question])
+    starting_msg = welcome_msg.format(player_names[0], player_names[1], questions[quest_num])
     starting_msg_in_bytes = starting_msg.encode(FORMAT)
     server_tcp_client_sock.sendall(starting_msg_in_bytes)
-    server_tcp_client_sock.settimeout(10)
     # answers_queue = queue.Queue()
     # answer_thread = threading.Thread(target = recieve_answer_running, args = (server_tcp_client_sock, answers_queue,))
     # answer_thread.start()
@@ -129,12 +201,14 @@ def client_registration_running(registration_locker : threading.Lock, playing_lo
         answering_locker.acquire()
         client_answer = client_answer_in_bytes.decode(FORMAT)
         if (winner_name == None):
-            if(client_answer == answers[num_of_question]):
+            if(client_answer == answers[quest_num]):
                 winner_name = client_name
             else:
                 winner_name = player_names[abs(index_name - 1)]
         answering_locker.release()
     except Exception as e:
+        print(e)
+        print("server problem")
         if(winner_name == None):
             winner_name = "tie"
     # server_tcp_client_sock.settimeout(None)
@@ -144,12 +218,13 @@ def client_registration_running(registration_locker : threading.Lock, playing_lo
     #     else:
     #         winner_name = player_names[abs(index_name - 1)]
     # answering_locker.release()    
-    ending_msg = game_over_msg.format(answers[num_of_question], winner_name)
+    ending_msg = game_over_msg.format(answers[quest_num], winner_name)
     ending_msg_in_bytes = ending_msg.encode(FORMAT)
     try:
         server_tcp_client_sock.sendall(ending_msg_in_bytes)
     except Exception as e:
         print(e)
+        print("server problem")
     server_tcp_client_sock.close()
     playing_locker.release()
     # sock_list.pop
@@ -163,7 +238,7 @@ def recieve_answer_running(server_tcp_client_sock : socket.socket , answers_queu
 
 def start():
     print("Server started, listening on IP address {}".format(IP))
-    broadcast_thread = threading.Thread(target = UDP_running)
+    broadcast_thread = threading.Thread(target = udp)
     broadcast_thread.start()
 
 start()

@@ -32,20 +32,24 @@ def start():
                     try:
                         c = msvcrt.getch()
                         # score_msg_byte = client_tcp_sock.recv(TCP_MSG_SIZE)
-                        read , _ , _= select.select([sys.stdin.fileno(), client_tcp_sock.fileno()], [], [], 10)
-                        if(sys.stdin.fileno() in read):
-                            # c = sys.stdin.read(1)
-                            c = msvcrt.getch()
-                            client_tcp_sock.send(c.encode(FORMAT))
+                        # read , _ , _= select.select([sys.stdin.fileno(), client_tcp_sock.fileno()], [], [], 10)
+                        # if(sys.stdin.fileno() in read):
+                        #     # c = sys.stdin.read(1)
+                        #     c = msvcrt.getch()
+                        #     client_tcp_sock.send(c.encode(FORMAT))
+                        client_tcp_sock.send(c)
                         score_msg_byte = client_tcp_sock.recv(TCP_MSG_SIZE)
                         score_msg = score_msg_byte.decode(FORMAT)
                         print(score_msg)
                     except Exception as e:
                         print(e)
+                        print("client problem")
                 except Exception as e:
-                    print(e) 
+                    print(e)
+                    print("client problem") 
             except Exception as e:
                 print(e)
+                print("client problem")
             print("Server disconnected, listening for offer requests...\n")
     client_udp_sock.close()
 
