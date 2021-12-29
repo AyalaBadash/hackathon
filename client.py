@@ -1,7 +1,6 @@
 import socket
 import sys
 import select
-import msvcrt
 
 from mediator import *
 def start():
