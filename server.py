@@ -238,7 +238,7 @@ def recieve_answer_running(server_tcp_client_sock : socket.socket , answers_queu
 
 def start():
     print("Server started, listening on IP address {}".format(IP))
-    broadcast_thread = threading.Thread(target = udp)
+    broadcast_thread = threading.Thread(target = UDP_running)
     broadcast_thread.start()
 
 start()
